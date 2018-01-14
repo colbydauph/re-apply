@@ -46,6 +46,10 @@ describe('ReApply', () => {
     expect(handler.callCount).to.eql(1);
   });
   
+  it('should serialize to a method description', () => {
+    expect(`${ func.one.two.three.four.five }`).to.eql('<ReApply.one.two.three.four.five>');
+  });
+  
   describe('handler', () => {
     
     it('should be called with the method', () => {
