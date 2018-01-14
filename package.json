@@ -35,10 +35,10 @@
       "**/*.test.(js|jsx)",
       "**/dist/**"
     ],
-    "lines": 95,
-    "statements": 95,
-    "functions": 95,
-    "branches": 95,
+    "lines": 80,
+    "statements": 80,
+    "functions": 65,
+    "branches": 85,
     "reporter": [
       "html",
       "text-summary"

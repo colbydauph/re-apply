@@ -3,38 +3,44 @@
 const util = require('util');
 
 const noop = () => {};
+const noop2 = () => () => {};
 const readOnly = () => {
-  throw new TypeError('Read-only');
+  throw new Error('Read-only');
 };
 
 const toPrimitive = (method) => (hint) => {
-  if (hint !== 'number') return `<ReApply.${ method.join('.') }>`;
+  if (hint !== 'number') return `<${ ['ReApply', ...method].join('.') }>`;
 };
 
-const iteratorOf = (arr) => function* iteratorOf() {
+const iteratorFrom = (arr) => function* iteratorFrom() {
   for (const el of arr) yield el;
 };
 
-const getKnownProp = (propName, method) => {
-  if (propName === util.inspect.custom) return toPrimitive(method);
-  if (propName === Symbol.toPrimitive) return toPrimitive(method);
-  if (propName === Symbol.iterator) return iteratorOf(method);
-  if (propName === Symbol.toStringTag) return () => 'ReApply';
-};
+// these are the only props defined on functions in the tree
+const getKnownProp = (propName, method) => ({
+  [util.inspect.custom]: toPrimitive,
+  [Symbol.toPrimitive]: toPrimitive,
+  [Symbol.iterator]: iteratorFrom,
+  [Symbol.toStringTag]: () => 'ReApply',
+}[propName] || noop)(method);
 
-const ReApplyRoot = (method = []) => function ReApply(handler = noop) {
-  return new Proxy(handler, {
+// Array<String> -> ReApply
+const ReApplyAt = (method = []) => function ReApply(handler = noop2) {
+  return new Proxy(handler(method), {
     set: readOnly,
     deleteProperty: readOnly,
+    // keys are unbounded
+    has: () => true,
+    ownKeys: () => [],
     get: (target, propName) => {
       return getKnownProp(propName, method) ||
-             ReApplyRoot([...method, propName])(handler);
+             ReApplyAt([...method, propName])(handler);
     },
-    apply: (target, context, args) => target({ method, args, context }),
+    apply: (target, context, args) => target.apply(context, args),
   });
 };
 
 module.exports = Object.assign(
-  ReApplyRoot([]),
-  { root: ReApplyRoot },
+  ReApplyAt([]),
+  { path: ReApplyAt },
 );

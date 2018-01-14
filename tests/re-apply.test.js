@@ -12,10 +12,11 @@ const arrOfLen = (len) => [...Array(len)];
 
 describe('ReApply', () => {
   
-  let func, handler;
+  let RA, trap, getTrap;
   beforeEach('stub', () => {
-    handler = sinon.stub();
-    func = ReApply(handler);
+    trap = sinon.stub();
+    getTrap = sinon.stub().returns(trap);
+    RA = ReApply(getTrap);
   });
   
   it('should be a function', () => {
@@ -27,86 +28,116 @@ describe('ReApply', () => {
   });
   
   it('should return a function', () => {
-    expect(func).to.be.a('function');
+    expect(RA).to.be.a('function');
   });
   
   it('should have functions at every key', () => {
-    const func = ReApply(handler);
-    expect(func[randKey()]).to.be.a('function');
+    const RA = ReApply(getTrap);
+    expect(RA[randKey()]).to.be.a('function');
   });
   
   it('should be infinitely deep', () => {
-    func = arrOfLen(50).reduce((func) => func[randKey()], func);
-    expect(func).to.be.a('function');
+    RA = arrOfLen(50).reduce((RA) => RA[randKey()], RA);
+    expect(RA).to.be.a('function');
   });
   
-  it('should call the handler when any function is called', () => {
+  it('should call the trap when any function is called', () => {
     const input = {};
-    func[randKey()][randKey()][randKey()](input);
-    expect(handler.callCount).to.eql(1);
+    RA[randKey()][randKey()][randKey()](input);
+    expect(trap.callCount).to.eql(1);
   });
   
   it('should serialize to a method description', () => {
-    expect(`${ func.one.two.three.four.five }`).to.eql('<ReApply.one.two.three.four.five>');
-  });
-  
-  describe('handler', () => {
-    
-    it('should be called with the method', () => {
-      const method = ['a', 'b', 'c'];
-      func[method[0]][method[1]][method[2]]();
-      expect(handler.args[0][0].method).to.eql(method);
-    });
-    
-    it('should be called with the args', () => {
-      const args = [1, 2, 3];
-      func[randKey()][randKey()][randKey()](...args);
-      expect(handler.args[0][0].args).to.eql(args);
-    });
-    
-    it('should be called with the context', () => {
-      func = func[randKey()][randKey()][randKey()];
-      const context = { func };
-      context.func();
-      expect(handler.args[0][0].context).to.equal(context);
-    });
-    
+    expect(`${ RA }`).to.eql('<ReApply>');
+    expect(`${ RA.one.two.three.four.five }`).to.eql('<ReApply.one.two.three.four.five>');
   });
   
   it('should work with async functions', async () => {
     const expected = {};
-    const func = ReApply(async () => expected);
-    const result = await func.a.b.c();
+    const RA = ReApply(() => async () => expected);
+    const result = await RA.a.b.c();
     expect(result).to.eql(expected);
   });
   
   it('should propagate errors', () => {
     const error = Error('oops');
-    const func = ReApply(() => {
+    const RA = ReApply(() => () => {
       throw error;
     });
     
-    expect(func[randKey()][randKey()][randKey()]).to.throw(error);
+    expect(RA[randKey()][randKey()][randKey()]).to.throw(error);
   });
   
-  describe('ReApply.root', () => {
+  it('should be immutable', () => {
+    expect(() => {
+      RA.a = 1;
+    }).to.throw(Error, 'Read-only');
+    expect(() => {
+      delete RA.a;
+    }).to.throw(Error, 'Read-only');
+  });
+  
+  it('should return true for all keys with the in operator', () => {
+    expect(randKey() in RA).to.eql(true);
+  });
+  
+  describe('getTrap', () => {
+    
+    it('should be called once for each key (plus once for root)', () => {
+      const path = ['a', 'b', 'c'];
+      RA[path[0]][path[1]][path[2]]();
+      expect(getTrap.callCount).to.eql(path.length + 1);
+    });
+    
+    it('should be called with the method path', () => {
+      const path = ['a', 'b', 'c'];
+      RA[path[0]][path[1]][path[2]]();
+      expect(getTrap.args[3][0]).to.eql(path);
+    });
+    
+  });
+  
+  describe('trap', () => {
+    
+    it('should be called once per application', () => {
+      const args = [1, 2, 3];
+      RA[randKey()][randKey()][randKey()](...args);
+      expect(trap.callCount).to.eql(1);
+    });
+    
+    it('should be called with the args', () => {
+      const args = [1, 2, 3];
+      RA[randKey()][randKey()][randKey()](...args);
+      expect(trap.args[0]).to.eql(args);
+    });
+    
+    it('should be called with the context', () => {
+      RA = RA[randKey()][randKey()][randKey()];
+      const context = { RA };
+      context.RA();
+      expect(trap.getCall(0).thisValue).to.equal(context);
+    });
+    
+  });
+  
+  describe('ReApply.path', () => {
     
     it('should be a function', () => {
-      expect(ReApply.root).to.be.a('function');
+      expect(ReApply.path).to.be.a('function');
     });
     
     it('should return a function', () => {
-      expect(ReApply.root()).to.be.a('function');
+      expect(ReApply.path()).to.be.a('function');
     });
     
-    it('should prepend method parts', () => {
-      const root = [randKey(), randKey(), randKey()];
+    it('should prepend path parts', () => {
+      const path = [randKey(), randKey(), randKey()];
       const tail = [randKey(), randKey(), randKey()];
       
-      const func = ReApply.root(root)(handler);
-      func[tail[0]][tail[1]][tail[2]]();
+      const RA = ReApply.path(path)(getTrap);
+      RA[tail[0]][tail[1]][tail[2]]();
       
-      expect(handler.args[0][0].method).to.eql([...root, ...tail]);
+      expect(getTrap.args[4][0]).to.eql([...path, ...tail]);
     });
     
     it('should be curried');
